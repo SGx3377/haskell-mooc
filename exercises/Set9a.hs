@@ -266,9 +266,4 @@ multiply :: Permutation -> Permutation -> Permutation
 multiply p q = map (\i -> p !! (q !! i)) (identity (length p))
 
 permute :: Permutation -> [a] -> [a]
-permute perm list = permute' 0 perm list
-  where
-    permute' _ [] _ = []
-    permute' m ((from, to):rest) list
-      | m == from = (list !! to) : permute' (m + 1) rest list
-      | otherwise = permute' m rest list
+permute p xs = [xs !! i | i <- p]
