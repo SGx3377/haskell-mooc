@@ -17,7 +17,8 @@ import Mooc.Todo
 --   incrementAll (Just 3.0)  ==>  Just 4.0
 
 incrementAll :: (Functor f, Num n) => f n -> f n
-incrementAll x = todo
+incrementAll = fmap (\n -> n + 1)
+
 
 ------------------------------------------------------------------------------
 -- Ex 2: Sometimes one wants to fmap multiple levels deep. Implement
@@ -38,10 +39,10 @@ incrementAll x = todo
 --       ==> Just [Just True,Nothing]
 
 fmap2 :: (Functor f, Functor g) => (a -> b) -> f (g a) -> f (g b)
-fmap2 = todo
+fmap2 fx = fmap (fmap fx)
 
 fmap3 :: (Functor f, Functor g, Functor h) => (a -> b) -> f (g (h a)) -> f (g (h b))
-fmap3 = todo
+fmap3 fx = fmap (fmap2 fx)
 
 ------------------------------------------------------------------------------
 -- Ex 3: below you'll find a type Result that works a bit like Maybe,
@@ -54,7 +55,11 @@ data Result a = MkResult a | NoResult | Failure String
   deriving Show
 
 instance Functor Result where
-  fmap f result = todo
+  fmap f result = case result of
+    MkResult a -> MkResult (f a)
+    Failure s  -> Failure s
+    NoResult   -> NoResult
+
 
 ------------------------------------------------------------------------------
 -- Ex 4: Here's a reimplementation of the Haskell list type. You might
@@ -68,9 +73,13 @@ data List a = Empty | LNode a (List a)
   deriving Show
 
 instance Functor List where
+  fmap f lst = case lst of
+    Empty -> Empty
+    LNode a b -> LNode (f a) (fmap f b)
+
 
 ------------------------------------------------------------------------------
--- Ex 5: Here's another list type. This time every node contains two
+-- Ex 5: Here's another list type. This type every node contains two
 -- values, so it's a type for a list of pairs. Implement the instance
 -- Functor TwoList.
 --
@@ -82,6 +91,10 @@ data TwoList a = TwoEmpty | TwoNode a a (TwoList a)
   deriving Show
 
 instance Functor TwoList where
+  fmap f twoList = case twoList of
+    TwoEmpty -> TwoEmpty
+    TwoNode x y a -> TwoNode (f x) (f y) (fmap f a)
+
 
 ------------------------------------------------------------------------------
 -- Ex 6: Count all occurrences of a given element inside a Foldable.
@@ -94,7 +107,7 @@ instance Functor TwoList where
 --   count 'c' (Just 'c') ==> 1
 
 count :: (Eq a, Foldable f) => a -> f a -> Int
-count = todo
+count c = foldr (\x acc -> if x == c then acc + 1 else acc) 0
 
 ------------------------------------------------------------------------------
 -- Ex 7: Return all elements that are in two Foldables, as a list.
@@ -105,7 +118,10 @@ count = todo
 --   inBoth Nothing [3]    ==> []
 
 inBoth :: (Foldable f, Foldable g, Eq a) => f a -> g a -> [a]
-inBoth = todo
+inBoth a b = foldr (\x acc -> if x `elem` bList then x : acc else acc) [] aList
+  where
+    aList = toList a
+    bList = toList b
 
 ------------------------------------------------------------------------------
 -- Ex 8: Implement the instance Foldable List.
@@ -118,7 +134,9 @@ inBoth = todo
 --   length (LNode 1 (LNode 2 (LNode 3 Empty))) ==> 3
 
 instance Foldable List where
-  foldr = todo
+  foldr f init lst = case lst of
+    Empty -> init
+    LNode a x -> f a (foldr f init x)
 
 ------------------------------------------------------------------------------
 -- Ex 9: Implement the instance Foldable TwoList.
@@ -128,7 +146,8 @@ instance Foldable List where
 --   length (TwoNode 0 1 (TwoNode 2 3 TwoEmpty)) ==> 4
 
 instance Foldable TwoList where
-  foldr = todo
+  foldr _ init TwoEmpty        = init
+  foldr f init (TwoNode a b x) = f a (f b (foldr f init x))
 
 ------------------------------------------------------------------------------
 -- Ex 10: (Tricky!) Fun a is a type that wraps a function Int -> a.
@@ -143,6 +162,8 @@ runFun :: Fun a -> Int -> a
 runFun (Fun f) x = f x
 
 instance Functor Fun where
+  fmap g (Fun f) = Fun (\x -> g (f x))
+
 
 ------------------------------------------------------------------------------
 -- Ex 11: (Tricky!) You'll find the binary tree type from Set 5b
@@ -199,16 +220,17 @@ data Tree a = Leaf | Node a (Tree a) (Tree a)
   deriving Show
 
 instance Functor Tree where
-  fmap = todo
+  fmap _ Leaf = Leaf
+  fmap f (Node a left right) = Node (f a) (fmap f left) (fmap f right)
+
 
 sumTree :: Monoid m => Tree m -> m
-sumTree = todo
+sumTree Leaf = mempty
+sumTree (Node a left right) = sumTree left <> a <> sumTree right
 
 instance Foldable Tree where
-  foldMap f t = sumTree (fmap f t)
+  foldMap f Leaf = mempty
+  foldMap f (Node a left right) = foldMap f left <> f a <> foldMap f right
 
-------------------------------------------------------------------------------
--- Bonus! If you enjoyed the two last exercises (not everybody will),
--- you'll like the `loeb` function:
---
---   https://github.com/quchen/articles/blob/master/loeb-moeb.md
+
+-- Reference from Q11 and Q9 https://github.com/tinfoil-knight/haskell-mooc/blob/master/Set12.hs
