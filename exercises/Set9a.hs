@@ -26,13 +26,12 @@ import Mooc.Todo
 -- Otherwise return "Ok."
 
 workload :: Int -> Int -> String
-workload nExercises hoursPerExercise =
-  case x of
-    _ | x > 100   -> "Holy moly!"
-      | x < 10    -> "Piece of cake!"
-      | otherwise -> "Ok."
-  where
-    x = nExercises * hoursPerExercise
+workload nExercises hoursPerExercise
+  | totalHours > 100 = "Holy moly!"
+  | totalHours < 10  = "Piece of cake!"
+  | otherwise         = "Ok."
+  where totalHours = nExercises * hoursPerExercise
+
 
 ------------------------------------------------------------------------------
 -- Ex 2: Implement the function echo that builds a string like this:
@@ -45,10 +44,9 @@ workload nExercises hoursPerExercise =
 -- Hint: use recursion
 
 echo :: String -> String
-echo s = echoHelper s
+echo str = concatMap (\(i, s) -> s ++ ", ") (zip [0..] (prefixes str))
   where
-    echoHelper [] = ""
-    echoHelper s' = s' ++ ", " ++ echoHelper (tail s')
+    prefixes s = [drop i s | i <- [0..length s - 1]]
 
 
 ------------------------------------------------------------------------------
@@ -62,9 +60,15 @@ echo s = echoHelper s
 -- are valid.
 
 countValid :: [String] -> Int
-countValid = length . filter (\a -> validIndex 2 4 a || validIndex 3 5 a)
+countValid = length . filter checkValidity
+
+checkValidity :: String -> Bool
+checkValidity serial
+  | length serial < 6 = False
+  | otherwise = hasMatchingDigits serial
   where
-    validIndex i j s = s !! i == s !! j
+    hasMatchingDigits s = (s !! 2 == s !! 4) || (s !! 3 == s !! 5)
+
 
 ------------------------------------------------------------------------------
 -- Ex 4: Find the first element that repeats two or more times _in a
@@ -78,11 +82,11 @@ countValid = length . filter (\a -> validIndex 2 4 a || validIndex 3 5 a)
 repeated :: Eq a => [a] -> Maybe a
 repeated xs = findRepeated xs
   where
-    findRepeated []       = Nothing
-    findRepeated [_]      = Nothing
-    findRepeated (y:z:ys)
-      | y == z    = Just y
-      | otherwise = findRepeated (z:ys)
+    findRepeated [] = Nothing
+    findRepeated [_] = Nothing
+    findRepeated (x:y:rest)
+      | x == y    = Just x
+      | otherwise = findRepeated (y:rest)
 
 
 ------------------------------------------------------------------------------
@@ -106,10 +110,11 @@ repeated xs = findRepeated xs
 
 sumSuccess :: [Either String Int] -> Either String Int
 sumSuccess xs = 
-  let succesful = [x | Right x <- xs] 
-  in if null succesful
-     then Left "no data"
-     else Right (foldr (+) 0 succesful)
+    let successfulMeasurements = [n | Right n <- xs]  -- Extract successful measurements
+    in if null successfulMeasurements 
+       then Left "no data" 
+       else Right (sum successfulMeasurements)  -- Sum up the successful measurements
+
 
 ------------------------------------------------------------------------------
 -- Ex 6: A combination lock can either be open or closed. The lock
@@ -131,37 +136,36 @@ sumSuccess xs =
 --   isOpen (open "0000" (lock (changeCode "0000" (open "1234" aLock)))) ==> True
 --   isOpen (open "1234" (lock (changeCode "0000" (open "1234" aLock)))) ==> False
 
--- Define the Lock datatype with code and status
-data Lock = Locked String | Unlocked String
+data Lock = Locked String | Opened String | NotInitialized
   deriving Show
 
--- aLock should be a locked lock with the code "1234"
+-- aLock initializes a lock as Locked with the code "1234"
 aLock :: Lock
 aLock = Locked "1234"
 
--- isOpen returns True if the lock is open
+-- isOpen returns True if the lock is Opened
 isOpen :: Lock -> Bool
-isOpen (Unlocked _) = True
-isOpen (Locked _)   = False
+isOpen (Opened _) = True
+isOpen _          = False
 
--- open tries to open the lock with the given code. If the code is
--- wrong, nothing happens.
+-- open attempts to open the lock with the given code. If the code is correct, it returns an Opened lock; otherwise, it returns the original lock.
 open :: String -> Lock -> Lock
-open _ lock@(Unlocked _)      = lock
-open input lock@(Locked code)
-  | input == code = Unlocked code
-  | otherwise     = lock
+open code (Opened currentCode) = Opened currentCode 
+open code (Locked correctCode)
+  | code == correctCode = Opened correctCode
+  | otherwise           = Locked correctCode
+open _ NotInitialized = NotInitialized
 
--- lock closes a lock. If the lock is already closed, nothing happens.
+-- lock changes an Opened lock to Locked. If already Locked or NotInitialized, it remains unchanged.
 lock :: Lock -> Lock
-lock (Unlocked code) = Locked code
-lock lock@(Locked _) = lock
+lock (Opened currentCode) = Locked currentCode
+lock lockState           = lockState 
 
--- changeCode changes the code of an open lock. If the lock is closed,
--- nothing happens.
-changeCode :: String -> Lock -> Lock
-changeCode _ lock@(Locked _)    = lock
-changeCode newCode (Unlocked _) = Unlocked newCode
+-- changeCode updates the code of an Opened lock. If the lock is Locked or NotInitialized, it remains unchanged.
+changeCode newCode (Opened _) = Opened newCode
+changeCode _ lockState = lockState  
+
+
 
 ------------------------------------------------------------------------------
 -- Ex 7: Here's a type Text that just wraps a String. Implement an Eq
@@ -176,18 +180,16 @@ changeCode newCode (Unlocked _) = Unlocked newCode
 --   Text "abc"  == Text "abcd"     ==> False
 --   Text "a bc" == Text "ab  d\n"  ==> False
 
+-- Define the Text type
 data Text = Text String
   deriving Show
 
+-- Implement the Eq instance for Text
 instance Eq Text where
-  Text a == Text b = normalize a == normalize b
-
-normalize :: String -> String
-normalize s = [c | c <- s, not (isWhitespace c)]
-
-isWhitespace :: Char -> Bool
-isWhitespace c = c == ' ' || c == '\n' || c == '\t' || c == '\r'
-
+  (Text s1) == (Text s2) = normalize s1 == normalize s2
+    where
+      -- Normalize the string by removing whitespace characters
+      normalize = filter (not . isSpace)
 
 ------------------------------------------------------------------------------
 -- Ex 8: We can represent functions or mappings as lists of pairs.
@@ -220,8 +222,8 @@ isWhitespace c = c == ' ' || c == '\n' || c == '\t' || c == '\r'
 --     compose [("a","alpha"),("b","beta"),("c","gamma")] [("alpha",1),("beta",2),("omicron",15)]
 --       ==> [("a",1),("b",2)]
 
-compose :: (Eq a, Eq b, Eq c) => [(a,b)] -> [(b,c)] -> [(a,c)]
-compose xs ys = [(fst x, z) | x <- xs, let y = snd x, (y', z) <- ys, y' == y]
+compose :: (Eq a, Eq b) => [(a, b)] -> [(b, c)] -> [(a, c)]
+compose xs ys = [ (a, c) | (a, b) <- xs, (b', c) <- ys, b == b' ]
 
 ------------------------------------------------------------------------------
 -- Ex 9: Reorder a list using a list of indices.
@@ -255,7 +257,6 @@ compose xs ys = [(fst x, z) | x <- xs, let y = snd x, (y', z) <- ys, y' == y]
 -- A type alias for index lists.
 type Permutation = [Int]
 
-
 -- Permuting a list with the identity permutation should change nothing.
 identity :: Int -> Permutation
 identity n = [0 .. n - 1]
@@ -266,4 +267,13 @@ multiply :: Permutation -> Permutation -> Permutation
 multiply p q = map (\i -> p !! (q !! i)) (identity (length p))
 
 permute :: Permutation -> [a] -> [a]
-permute p xs = [xs !! i | i <- p]
+permute permList xs = go permList xs (replicate (length xs) undefined)
+  where
+    go [] _ result = result
+    go (p:ps) (x:xs) result = go ps xs (replaceAt p x result)
+    go _ _ result = result
+
+    replaceAt :: Int -> a -> [a] -> [a]
+    replaceAt _ _ [] = []
+    replaceAt 0 newValue (_:xs) = newValue : xs
+    replaceAt n newValue (x:xs) = x : replaceAt (n - 1) newValue xs
