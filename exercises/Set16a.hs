@@ -17,8 +17,8 @@ import Data.List
 --  *Set16a> quickCheck (isSorted [])
 --  +++ OK, passed 1 test.
 
-isSorted :: (Show a, Ord a) => [a] -> Property
-isSorted = todo
+isSorted :: (Show b, Ord b) => [b] -> Property
+isSorted lst = sort lst === lst
 
 ------------------------------------------------------------------------------
 -- Ex 2: In this and the following exercises, we'll build a suite of
@@ -49,8 +49,10 @@ isSorted = todo
 --  *Set16a> quickCheck (sumIsLength [4,5,6,4,5,4] (freq1 [4,5,6,4,5,4]))
 --  +++ OK, passed 1 test.
 
-sumIsLength :: Show a => [a] -> [(a,Int)] -> Property
-sumIsLength input output = todo
+sumIsLength :: Show a => [a] -> [(a, Int)] -> Property
+sumIsLength elements pairs = length elements === totalSum
+  where
+    totalSum = sum (map snd pairs)
 
 -- This is a function that passes the sumIsLength test but is wrong
 freq1 :: Eq a => [a] -> [(a,Int)]
@@ -78,8 +80,9 @@ freq1 (x:y:xs) = [(x,1),(y,length xs + 1)]
 --  *Set16a> quickCheck (inputInOutput [4,5,6,4,5,4] (freq2 [4,5,6,4,5,4]))
 --  +++ OK, passed 100 tests.
 
-inputInOutput :: (Show a, Eq a) => [a] -> [(a,Int)] -> Property
-inputInOutput input output = todo
+inputInOutput :: (Show a, Eq a) => [a] -> [(a, Int)] -> Property
+inputInOutput xs tuples = forAll (elements xs) $ \x -> x `elem` map fst tuples
+
 
 -- This function passes both the sumIsLength and inputInOutput tests
 freq2 :: Eq a => [a] -> [(a,Int)]
@@ -109,8 +112,14 @@ freq2 xs = map (\x -> (x,1)) xs
 --  *Set16a> quickCheck (outputInInput [4,5,6,4,5,4] (freq3 [4,5,6,4,5,4]))
 --  +++ OK, passed 100 tests.
 
-outputInInput :: (Show a, Eq a) => [a] -> [(a,Int)] -> Property
-outputInInput input output = todo
+outputInInput :: (Show a, Eq a) => [a] -> [(a, Int)] -> Property
+outputInInput values pairs = forAll (elements pairs) $ \(key, count) -> verifyCount values key count
+
+verifyCount :: (Eq a) => [a] -> a -> Int -> Property
+verifyCount list item expectedCount = (actualCount === expectedCount)
+  where
+    actualCount = length $ filter (== item) list
+
 
 -- This function passes the outputInInput test but not the others
 freq3 :: Eq a => [a] -> [(a,Int)]
@@ -138,8 +147,22 @@ freq3 (x:xs) = [(x,1 + length (filter (==x) xs))]
 --  *Set16a> quickCheck (frequenciesProp frequencies)
 --  +++ OK, passed 100 tests.
 
-frequenciesProp :: ([Char] -> [(Char,Int)]) -> NonEmptyList Char -> Property
-frequenciesProp freq input = todo
+frequenciesProp :: ([Char] -> [(Char, Int)]) -> NonEmptyList Char -> Property
+frequenciesProp frequencyFunction (NonEmpty chars) = 
+  conjoin $ map (applyProp chars) properties
+  where
+    result = frequencyFunction chars
+    properties = [checkLength, checkInputInOutput, checkOutputInInput]
+    applyProp input prop = prop input result
+
+checkLength :: [Char] -> [(Char, Int)] -> Property
+checkLength input output = sumIsLength input output
+
+checkInputInOutput :: [Char] -> [(Char, Int)] -> Property
+checkInputInOutput input output = inputInOutput input output
+
+checkOutputInInput :: [Char] -> [(Char, Int)] -> Property
+checkOutputInInput input output = outputInInput input output
 
 frequencies :: Eq a => [a] -> [(a,Int)]
 frequencies [] = []
@@ -170,7 +193,10 @@ frequencies (x:ys) = (x, length xs) : frequencies others
 --  [2,4,10]
 
 genList :: Gen [Int]
-genList = todo
+genList = do
+  range <- choose (3, 5)
+  elements <- vectorOf range (elements [0..10])
+  return $ sort elements
 
 ------------------------------------------------------------------------------
 -- Ex 7: Here are the datatypes Arg and Expression from Set 15. Write
@@ -208,7 +234,26 @@ data Expression = Plus Arg Arg | Minus Arg Arg
   deriving (Show, Eq)
 
 instance Arbitrary Arg where
-  arbitrary = todo
+  arbitrary = frequency [(1, generateVars), (1, generateNums)]
+    where
+      generateVars = do
+        var <- elements ['a', 'b', 'c', 'x', 'y', 'z']
+        return $ Variable var
+
+      generateNums = do
+        num <- elements [0..10]
+        return $ Number num
 
 instance Arbitrary Expression where
-  arbitrary = todo
+  arbitrary = oneof [createAddition, createSubtraction]
+    where
+      createAddition = do
+        left <- arbitrary
+        right <- arbitrary
+        return $ Plus left right
+
+      createSubtraction = do
+        left <- arbitrary
+        right <- arbitrary
+        return $ Minus left right
+
