@@ -277,3 +277,5 @@ permute permList xs = go permList xs (replicate (length xs) undefined)
     replaceAt _ _ [] = []
     replaceAt 0 newValue (_:xs) = newValue : xs
     replaceAt n newValue (x:xs) = x : replaceAt (n - 1) newValue xs
+
+-- References from https://github.com/tinfoil-knight/haskell-mooc/blob/master/Set9a.hs
