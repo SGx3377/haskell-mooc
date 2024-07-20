@@ -76,12 +76,17 @@ getAllQuery = Query (T.pack "SELECT account, amount FROM events;")
 -- NOTE! Do not add anything to the name, otherwise you'll get weird
 -- test failures later.
 openDatabase :: String -> IO Connection
-openDatabase = todo
+openDatabase filename = do
+  db <- open filename
+  _ <- execute_ db initQuery
+  return db
 
 -- given a db connection, an account name, and an amount, deposit
 -- should add an (account, amount) row into the database
 deposit :: Connection -> T.Text -> Int -> IO ()
-deposit = todo
+deposit db name amount = do
+  let params = (name, amount)
+  execute db depositQuery params
 
 ------------------------------------------------------------------------------
 -- Ex 2: Fetching an account's balance. Below you'll find
@@ -112,7 +117,9 @@ balanceQuery :: Query
 balanceQuery = Query (T.pack "SELECT amount FROM events WHERE account = ?;")
 
 balance :: Connection -> T.Text -> IO Int
-balance = todo
+balance db account = do
+  rows <- query db balanceQuery [account] :: IO [[Int]]
+  return $ foldr ((+) . head) 0 rows
 
 ------------------------------------------------------------------------------
 -- Ex 3: Now that we have the database part covered, let's think about
@@ -144,14 +151,23 @@ balance = todo
 --   parseCommand [T.pack "deposit", T.pack "madoff", T.pack "123456"]
 --     ==> Just (Deposit "madoff" 123456)
 
-data Command = Deposit T.Text Int | Balance T.Text
+data Command = Deposit T.Text Int | Balance T.Text | Withdraw T.Text Int
   deriving (Show, Eq)
 
 parseInt :: T.Text -> Maybe Int
 parseInt = readMaybe . T.unpack
 
 parseCommand :: [T.Text] -> Maybe Command
-parseCommand = todo
+parseCommand [x, y]
+  | T.unpack x == "balance" = Just (Balance y)
+  | otherwise = Nothing
+parseCommand [x, y, z] = do
+  amt <- parseInt z
+  case T.unpack x of
+    "deposit"  -> Just (Deposit y amt)
+    "withdraw" -> Just (Withdraw y amt)
+    _          -> Nothing
+parseCommand _ = Nothing
 
 ------------------------------------------------------------------------------
 -- Ex 4: Running commands. Implement the IO operation perform that takes a
@@ -177,7 +193,16 @@ parseCommand = todo
 --   "0"
 
 perform :: Connection -> Maybe Command -> IO T.Text
-perform = todo
+perform db (Just (Balance b)) = do
+    x <- balance db b
+    return $ T.pack $ show x
+perform db (Just (Deposit b a)) = do
+    deposit db b a
+    return $ T.pack "OK"
+perform db (Just (Withdraw b a)) = do
+    deposit db b (-a)
+    return $ T.pack "OK"
+perform _ Nothing = return $ T.pack "ERROR"
 
 ------------------------------------------------------------------------------
 -- Ex 5: Next up, let's set up a simple HTTP server. Implement a WAI
@@ -197,7 +222,9 @@ encodeResponse t = LB.fromStrict (encodeUtf8 t)
 -- Remember:
 -- type Application = Request -> (Response -> IO ResponseReceived) -> IO ResponseReceived
 simpleServer :: Application
-simpleServer request respond = todo
+simpleServer request respond = do
+    let response = responseLBS status200 [] (encodeResponse $ T.pack "BANK")
+    respond response
 
 ------------------------------------------------------------------------------
 -- Ex 6: Now we finally have all the pieces we need to actually
@@ -226,7 +253,10 @@ simpleServer request respond = todo
 -- Remember:
 -- type Application = Request -> (Response -> IO ResponseReceived) -> IO ResponseReceived
 server :: Connection -> Application
-server db request respond = todo
+server db request respond = 
+  perform db (parseCommand $ pathInfo request) >>= \res -> 
+  respond (responseLBS status200 [] (encodeResponse res))
+
 
 port :: Int
 port = 3421
@@ -276,5 +306,7 @@ main = do
 --    - http://localhost:3421/deposit/pekka/1/3
 --    - http://localhost:3421/balance
 --    - http://localhost:3421/balance/matti/pekka
+
+-- References from https://github.com/dandax123/haskell-mooc-solutions/blob/main/Set14b.hs
 
 
