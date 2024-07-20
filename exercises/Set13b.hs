@@ -394,4 +394,4 @@ mkCounter = newIORef 0 >>= \c ->
   let inc = modifyIORef c (+1)
       get = readIORef c
   in return (inc, get)
-
+-- Reference from https://github.com/tinfoil-knight/haskell-mooc/blob/master/Set13b.hs
